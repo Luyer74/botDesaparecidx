@@ -32,26 +32,15 @@ def store_last_seen_id(last_seen_id, file_name):
     f_write.close()
     return
 
-####Get first mention
-#allmentions = api.mentions_timeline()
-#firstID = allmentions[len(allmentions) - 1].id
-#print(firstID)
-#f_write = open(file_name, 'w')
-#f_write.write(str(firstID))
-#f_write.close()
-###
-
 #mention function
 def mainfunction():
     last_seen_id = retrieve_last_seen_id(file_name)
     print(last_seen_id)
     mentions = api.mentions_timeline(last_seen_id, tweet_mode = 'extended')
+    mentions.reverse()
     #goes through all mentions
-    for mention in (mentions):
-        print("Found mention!")
+    for mention in mentions:
         print(str(mention.id) + ' - ' + mention.full_text)
-        last_seen_id = mention.id
-        store_last_seen_id(last_seen_id, file_name)
         #follows user who mentions
         if not mention.user.following:
             if mention.user.id != botId:
@@ -64,8 +53,13 @@ def mainfunction():
         if not mention.retweeted:
             #if is a reply
             if mention.in_reply_to_status_id is not None:
-                replyid = mention.in_reply_to_status_id
-                newuser = api.get_status(replyid)
+                try:
+                    replyid = mention.in_reply_to_status_id
+                    newuser = api.get_status(replyid)
+                except tweepy.TweepError as e:
+                    print(e)
+                    print("Mention error")
+                    continue
                 #check if it is following itself
                 if newuser.user.id != botId:
                     #follows original tweet
@@ -79,12 +73,18 @@ def mainfunction():
                     if not newuser.retweeted:
                         try:
                             newuser.retweet()
+                            print("Found mention!")
+                            last_seen_id = mention.id
+                            store_last_seen_id(last_seen_id, file_name)
                         except tweepy.TweepError as e:
                             print(e)
                             print("rt error")
             else:
                 try:
                     mention.retweet()
+                    print("Found mention!")
+                    last_seen_id = mention.id
+                    store_last_seen_id(last_seen_id, file_name)
                 except tweepy.TweepError as e:
                     print(e)
                     print("rt error")
