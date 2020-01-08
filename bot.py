@@ -1,5 +1,6 @@
 import tweepy
 import time
+from bot_wit import BotWit
 
 print('Hola uwu')
 
@@ -8,6 +9,7 @@ CONSUMER_SECRET = ''
 ACCESS_KEY = ''
 ACCESS_SECRET = ''
 
+bot_wit = BotWit("")
 idMexico = 110978
 botId = '143555567'
 file_name = 'last_seen_id.txt'
@@ -15,6 +17,7 @@ keywords = ["#desaparecido", "#desaparecida", "#alertaamber", "#teestamosbuscand
 resultTypes = ['recent', 'popular']
 searchword = []
 date_since = '2019-11-01'
+
 
 auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
 auth.set_access_token(ACCESS_KEY, ACCESS_SECRET)
@@ -33,7 +36,7 @@ def store_last_seen_id(last_seen_id, file_name):
     return
 
 #mention function
-def mainfunction():
+def mentionfunction():
     last_seen_id = retrieve_last_seen_id(file_name)
     print(last_seen_id)
     mentions = api.mentions_timeline(last_seen_id, tweet_mode = 'extended')
@@ -89,8 +92,8 @@ def mainfunction():
                     print(e)
                     print("rt error")
 
-#searching mainfunction
-def secondaryfunction():
+#searching mentionfunction
+def mainfunction():
     foundtweets = False
     #words loop
     for i in range(len(keywords)):
@@ -105,18 +108,29 @@ def secondaryfunction():
                 #3 tweets per keyword
                 if tweetcont != 3:
                     if not tweet.retweeted:
-                        print(tweet.text)
-                        print(tweet.user.location)
                         print(tweet.id)
                         try:
                             tweet.retweet()
                             tweetcont = tweetcont + 1
-                            api.update_status('@' + tweet.user.screen_name + ' Hola! Soy un bot que te ayudará a difundir tu caso, sígueme!', tweet.id)
                             print("New tweet found!")
-                            print("Checking mentions...")
-                            mainfunction()
-                            foundtweets = True
-                            time.sleep(1200)
+                            #check if valid
+                            tweetID = tweet.id
+                            tweet = api.get_status(tweetID, tweet_mode = 'extended')
+                            tweetmessage = tweet.full_text
+                            if bot_wit.get_intent(tweetmessage):
+                                print(tweet.full_text)
+                                print(tweet.user.location)
+                                print(tweet.id)
+                                print('Valid tweet! Responding...')
+                                api.update_status('@' + tweet.user.screen_name + ' Hola! Soy un bot que te ayudará a difundir tu caso, sígueme!', tweet.id)
+                                print("Checking mentions...")
+                                mentionfunction()
+                                foundtweets = True
+                                time.sleep(1800)
+                            else:
+                                print(tweet.full_text)
+                                api.unretweet(tweetID)
+                                print('Invalid tweet! Unretweeting...')
 
                         except tweepy.TweepError as e:
                             print(e)
@@ -129,11 +143,11 @@ def secondaryfunction():
     #no tweets found, check mentions
     if not foundtweets:
         print("Checking mentions...")
-        mainfunction()
-        time.sleep(1200)
+        mentionfunction()
+        time.sleep(1800)
 
 #loop
 while True:
     print("Checking tweets...")
-    secondaryfunction()
+    mainfunction()
     time.sleep(5)
