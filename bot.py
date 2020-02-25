@@ -74,14 +74,16 @@ def mentionfunction():
                             print("follow error")
                     #retweets original retweets
                     if not newuser.retweeted:
-                        try:
-                            newuser.retweet()
-                            print("Found mention!")
-                            last_seen_id = mention.id
-                            store_last_seen_id(last_seen_id, file_name)
-                        except tweepy.TweepError as e:
-                            print(e)
-                            print("rt error")
+                        #check if it is a series of replys, if not rt
+                        if newuser.in_reply_to_status_id is None:
+                            try:
+                                newuser.retweet()
+                                print("Found mention!")
+                                last_seen_id = mention.id
+                                store_last_seen_id(last_seen_id, file_name)
+                            except tweepy.TweepError as e:
+                                print(e)
+                                print("rt error")
             else:
                 try:
                     mention.retweet()
