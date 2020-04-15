@@ -3,7 +3,6 @@
 import tweepy  # https://github.com/tweepy/tweepy
 import credentials
 
-from tempfile import NamedTemporaryFile
 from bot_wit import BotWit
 from time import sleep
 
@@ -15,7 +14,8 @@ KEYWORDS = [
     "#desaparecida",
     "#alertaamber",
     "#teestamosbuscando",
-    "#alertadebusqueda"
+    "#alertadebusqueda",
+    "#alertaplateada"
 ]
 RESULT_TYPES = [
     "recent",
