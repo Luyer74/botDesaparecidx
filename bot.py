@@ -24,7 +24,7 @@ RESULT_TYPES = [
 REPLY_STRING = (
     "@{0} Hola! Soy un bot que te ayudará a difundir tu caso, sígueme!"
 )
-DATE_SINCE = "2019-11-01"
+DATE_SINCE = "2020-04-01"
 LAST_SEEN_FILE = "files/last_seen_id.txt"
 
 
