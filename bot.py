@@ -3,7 +3,6 @@
 import tweepy  # https://github.com/tweepy/tweepy
 import credentials
 
-from tempfile import NamedTemporaryFile
 from bot_wit import BotWit
 from time import sleep
 
@@ -15,7 +14,8 @@ KEYWORDS = [
     "#desaparecida",
     "#alertaamber",
     "#teestamosbuscando",
-    "#alertadebusqueda"
+    "#alertadebusqueda",
+    "#alertaplateada"
 ]
 RESULT_TYPES = [
     "recent",
@@ -32,7 +32,7 @@ LAST_SEEN_FILE = "files/last_seen_id.txt"
 class Bot():
 
     def __init__(self):
-        bot_wit = BotWit()
+        bot_wit = BotWit(credentials.BOT_WIT_KEY)
         auth = tweepy.OAuthHandler(
             credentials.CONSUMER_KEY,
             credentials.CONSUMER_SECRET
