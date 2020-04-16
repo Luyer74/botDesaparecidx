@@ -13,10 +13,10 @@ bot_wit = BotWit("")
 idMexico = 110978
 botId = '143555567'
 file_name = 'last_seen_id.txt'
-keywords = ["#desaparecido", "#desaparecida", "#alertaamber", "#teestamosbuscando", "#alertadebusqueda"]
+keywords = ["#desaparecido", "#desaparecida", "#alertaamber", "#teestamosbuscando", "#alertadebusqueda", "#alertaplateada"]
 resultTypes = ['recent', 'popular']
 searchword = []
-date_since = '2019-11-01'
+date_since = '2020-04-01'
 
 
 auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
@@ -85,14 +85,35 @@ def mentionfunction():
                                 print(e)
                                 print("rt error")
             else:
-                try:
-                    mention.retweet()
-                    print("Found mention!")
-                    last_seen_id = mention.id
-                    store_last_seen_id(last_seen_id, file_name)
-                except tweepy.TweepError as e:
-                    print(e)
-                    print("rt error")
+                #check if mention is quote of another tweet
+                if mention.is_quote_status:
+                    #get quote status
+                    quotedTweet = api.get_status(mention.quoted_status_id)
+                    #fav mention
+                    try:
+                        mention.favorite()
+                    except tweepy.TweepError as e:
+                        print(e)
+                        print("fav error")
+                    #retweet quoted
+                    try:
+                        quotedTweet.retweet()
+                        print("Found mention!")
+                    except tweepy.TweepError as e:
+                            print(e)
+                            print("rt error")
+
+                else:
+                    try:
+                        mention.retweet()
+                        print("Found mention!")
+
+                    except tweepy.TweepError as e:
+                        print(e)
+                        print("rt error")
+                #store mention id
+                last_seen_id = mention.id
+                store_last_seen_id(last_seen_id, file_name)
 
 #searching mentionfunction
 def mainfunction():
@@ -119,6 +140,8 @@ def mainfunction():
                             tweetID = tweet.id
                             tweet = api.get_status(tweetID, tweet_mode = 'extended')
                             tweetmessage = tweet.full_text
+                            #check lenghth of tweet and cut if greater than 280
+                            tweetmessage = tweetmessage[:280] if len(tweetmessage) > 280 else tweetmessage
                             if bot_wit.get_intent(tweetmessage):
                                 print(tweet.full_text)
                                 print(tweet.user.location)
