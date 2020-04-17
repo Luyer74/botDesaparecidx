@@ -23,14 +23,12 @@ class BotWit():
             return
 
         print("Tweet: "+ message)
-
         response = self.client.message(message)
         entities = response['entities']
         lost_intent = self.first_entity_value(entities, 'lost_intent')
         search_type = self.first_entity_value(entities, 'search_type')
         lost_adj = self.first_entity_value(entities, 'lost_adj')
         bot_name = self.first_entity_value(entities, 'bot_name')
-
         print(
             search_type + " ",
             lost_intent + " ",
@@ -43,14 +41,13 @@ class BotWit():
         if search_type:
             if lost_intent or lost_adj:
                 return True
-
+            
         return False
 
 
     def first_entity_value(self, entities, entity):
         if entity not in entities:
             return None
-
         else:
             val = entities[entity][0]['value']
             if val:
