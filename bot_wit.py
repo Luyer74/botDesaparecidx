@@ -30,8 +30,8 @@ class BotWit():
         lost_adj = self.first_entity_value(entities, 'lost_adj')
         bot_name = self.first_entity_value(entities, 'bot_name')
         print(
-            search_type + " ",
-            lost_intent + " ",
+            search_type, " ",
+            lost_intent, " ",
             lost_adj
         )
 
