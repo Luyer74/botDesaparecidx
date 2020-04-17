@@ -78,7 +78,6 @@ class Bot():
                     except tweepy.TweepError as e:
                         print(e)
                         print("follow error")
-
             # retweets
             if not mention.retweeted:
                 # if is a reply
@@ -131,12 +130,10 @@ class Bot():
                         except tweepy.TweepError as e:
                                 print(e)
                                 print("rt error")
-
                     else:
                         try:
                             mention.retweet()
                             print("Found mention!")
-
                         except tweepy.TweepError as e:
                             print(e)
                             print("rt error")
