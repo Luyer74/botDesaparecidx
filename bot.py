@@ -1,5 +1,3 @@
-#! /usr/bin/env python
-
 import tweepy  # https://github.com/tweepy/tweepy
 import credentials
 
@@ -25,14 +23,14 @@ REPLY_STRING = (
     "@{0} Hola! Soy un bot que te ayudará a difundir tu caso, sígueme!"
 )
 DATE_SINCE = "2020-04-01"
-LAST_SEEN_FILE = "files/last_seen_id.txt"
+LAST_SEEN_FILE = "last_seen_id.txt"
 
 
 
 class Bot():
 
     def __init__(self):
-        self.bot_wit = BotWit()
+        self.bot_wit = BotWit(credentials.BOT_WIT_KEY)
         auth = tweepy.OAuthHandler(
             credentials.CONSUMER_KEY,
             credentials.CONSUMER_SECRET
@@ -50,7 +48,7 @@ class Bot():
 
 
     def get_last_seen_id(self):
-        with open(LAST_SEEN_FILE, "r") as file: 
+        with open(LAST_SEEN_FILE, "r") as file:
             return int(file.read().strip())
 
 
@@ -109,23 +107,44 @@ class Bot():
                                     newuser.retweet()
                                     print("Found mention!")
                                     last_seen_id = mention.id
-                                    store_last_seen_id(
+                                    self.store_last_seen_id(
                                         last_seen_id,
                                     )
                                 except tweepy.TweepError as e:
                                     print(e)
                                     print("rt error")
                 else:
-                    try:
-                        mention.retweet()
-                        print("Found mention!")
-                        last_seen_id = mention.id
-                        store_last_seen_id(
-                            last_seen_id
-                        )
-                    except tweepy.TweepError as e:
-                        print(e)
-                        print("rt error")
+                    #check if mention is quote of another tweet
+                    if mention.is_quote_status:
+                        #get quote status
+                        quotedTweet = self.api.get_status(mention.quoted_status_id)
+                        #fav mention
+                        try:
+                            mention.favorite()
+                        except tweepy.TweepError as e:
+                            print(e)
+                            print("fav error")
+                        #retweet quoted
+                        try:
+                            quotedTweet.retweet()
+                            print("Found mention!")
+                        except tweepy.TweepError as e:
+                                print(e)
+                                print("rt error")
+
+                    else:
+                        try:
+                            mention.retweet()
+                            print("Found mention!")
+
+                        except tweepy.TweepError as e:
+                            print(e)
+                            print("rt error")
+                    #store mention id
+                    last_seen_id = mention.id
+                    self.store_last_seen_id(
+                        last_seen_id
+                    )
 
 
     # searching mentionfunction
@@ -165,7 +184,7 @@ class Bot():
                                 )
 
                                 tweetmessage = tweet.full_text
-                                if bot_wit.get_intent(tweetmessage):
+                                if self.bot_wit.get_intent(tweetmessage):
                                     print(tweet.full_text)
                                     print(tweet.user.location)
                                     print(tweet.id)
@@ -196,7 +215,7 @@ class Bot():
         # no tweets found, check mentions
         if not foundtweets:
             print("Checking mentions...")
-            self.mention_function(self.api)
+            self.mention_function()
             sleep(1800)
 
 
@@ -206,6 +225,5 @@ class Bot():
             self.worker()
             sleep(5)
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     Bot().main()
