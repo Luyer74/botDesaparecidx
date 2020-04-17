@@ -3,8 +3,8 @@ from wit import Wit #https://github.com/wit-ai/pywit
 
 
 class BotWit():
-    client = None
 
+    client = None
     def __init__(self, access_token):
         self.client = Wit(access_token)
 
