@@ -116,7 +116,11 @@ class Bot():
                     #check if mention is quote of another tweet
                     if mention.is_quote_status:
                         #get quote status
-                        quotedTweet = self.api.get_status(mention.quoted_status_id)
+                        try:
+                            quotedTweet = self.api.get_status(mention.quoted_status_id)
+                        except:
+                            print("quote error")
+                            continue
                         #fav mention
                         try:
                             mention.favorite()
