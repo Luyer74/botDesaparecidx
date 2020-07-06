@@ -34,16 +34,13 @@ class Bot():
 
     def __init__(self):
         self.counter = 0
-        self.researcherID = "1"
-        self.searchID = "1"
         # define the filename with time as prefix
         self.dateString = time.strftime('%Y-%m-%d - %H-%M-%S')
         self.output = open('bdatweets_%s.json'
                         % self.dateString, 'a')
-        # researcher ID and searchID
-        self.output.write(self.researcherID+'\n'+self.searchID+'\n')
         #wit
         self.bot_wit = BotWit(credentials.BOT_WIT_KEY)
+        #twitter credentials
         auth = tweepy.OAuthHandler(
             credentials.CONSUMER_KEY,
             credentials.CONSUMER_SECRET
