@@ -2,6 +2,8 @@ import tweepy  # https://github.com/tweepy/tweepy
 import credentials
 import time
 import json
+import os
+import shutil
 from bot_wit import BotWit
 from time import sleep
 
@@ -35,8 +37,9 @@ class Bot():
         self.researcherID = "1"
         self.searchID = "1"
         # define the filename with time as prefix
+        self.dateString = time.strftime('%Y-%m-%d - %H-%M-%S')
         self.output = open('bdatweets_%s.json'
-                        % (time.strftime('%Y%m%d-%H%M%S')), 'a')
+                        % self.dateString, 'a')
         # researcher ID and searchID
         self.output.write(self.researcherID+'\n'+self.searchID+'\n')
         #wit
@@ -73,11 +76,13 @@ class Bot():
         print("Dumping tweet number: " + str(self.counter))
         json.dump(tweet._json, self.output)
         self.output.write('\n')
-        if self.counter >= 20:
+        if self.counter >= 1:
             self.output.close()
-            print("new file...")
+            fileString = 'badtweets_%s.json' % self.dateString
+            shutil.move(fileString, 'tweetJSONS')
+            self.dateString = time.strftime('%Y-%m-%d - %H-%M-%S')
             self.output = open('bdatweets_%s.json'
-                                % (time.strftime('%Y%m%d-%H%M%S')), 'a')
+                        % self.dateString, 'a')
             self.counter = 0
 
 
