@@ -1,17 +1,18 @@
 import tweepy  # https://github.com/tweepy/tweepy
 import credentials
-
+import time
+import json
 from bot_wit import BotWit
 from time import sleep
 
 
 ID_MEXICO = credentials.ID_MEXICO
 BOT_ID = credentials.BOT_ID
+BANNEDID = None
 KEYWORDS = [
     "#desaparecido",
     "#desaparecida",
     "#alertaamber",
-    "#teestamosbuscando",
     "#alertadebusqueda",
     "#alertaplateada"
 ]
@@ -26,10 +27,19 @@ DATE_SINCE = "2020-04-01"
 LAST_SEEN_FILE = "last_seen_id.txt"
 
 
-
 class Bot():
 
+
     def __init__(self):
+        self.counter = 0
+        self.researcherID = "1"
+        self.searchID = "1"
+        # define the filename with time as prefix
+        self.output = open('bdatweets_%s.json'
+                        % (time.strftime('%Y%m%d-%H%M%S')), 'a')
+        # researcher ID and searchID
+        self.output.write(self.researcherID+'\n'+self.searchID+'\n')
+        #wit
         self.bot_wit = BotWit(credentials.BOT_WIT_KEY)
         auth = tweepy.OAuthHandler(
             credentials.CONSUMER_KEY,
@@ -47,6 +57,7 @@ class Bot():
         )
 
 
+
     def get_last_seen_id(self):
         with open(LAST_SEEN_FILE, "r") as file:
             return int(file.read().strip())
@@ -55,6 +66,20 @@ class Bot():
     def store_last_seen_id(self, last_seen_id):
         with open(LAST_SEEN_FILE, "w") as file:
             file.write(str(last_seen_id))
+
+
+    def dumpTweet(self, tweet):
+        self.counter += 1
+        print("Dumping tweet number: " + str(self.counter))
+        json.dump(tweet._json, self.output)
+        self.output.write('\n')
+        if self.counter >= 20:
+            self.output.close()
+            print("new file...")
+            self.output = open('bdatweets_%s.json'
+                                % (time.strftime('%Y%m%d-%H%M%S')), 'a')
+            self.counter = 0
+
 
 
     # mention function
@@ -71,6 +96,9 @@ class Bot():
         for mention in mentions:
             print(str(mention.id) + ' - ' + mention.full_text)
             # follows user who mentions
+            if mention.user.id == BANNEDID:
+                print("BANNED")
+                continue
             if not mention.user.following:
                 if mention.user.id != BOT_ID:
                     try:
@@ -78,13 +106,14 @@ class Bot():
                     except tweepy.TweepError as e:
                         print(e)
                         print("follow error")
+
             # retweets
             if not mention.retweeted:
                 # if is a reply
                 if mention.in_reply_to_status_id is not None:
                     try:
                         replyid = mention.in_reply_to_status_id
-                        newuser = self.api.get_status(replyid)
+                        newuser = self.api.get_status(replyid,              tweet_mode='extended')
                     except tweepy.TweepError as e:
                         print(e)
                         print("Mention error")
@@ -104,6 +133,7 @@ class Bot():
                             if newuser.in_reply_to_status_id is None:
                                 try:
                                     newuser.retweet()
+                                    self.dumpTweet(newuser)
                                     print("Found mention!")
                                     last_seen_id = mention.id
                                     self.store_last_seen_id(
@@ -113,11 +143,16 @@ class Bot():
                                     print(e)
                                     print("rt error")
                 else:
+                    #store mention id
+                    last_seen_id = mention.id
+                    self.store_last_seen_id(
+                        last_seen_id
+                    )
                     #check if mention is quote of another tweet
                     if mention.is_quote_status:
                         #get quote status
                         try:
-                            quotedTweet = self.api.get_status(mention.quoted_status_id)
+                            quotedTweet = self.api.get_status(mention.quoted_status_id, tweet_mode='extended')
                         except:
                             print("quote error")
                             continue
@@ -131,21 +166,21 @@ class Bot():
                         try:
                             quotedTweet.retweet()
                             print("Found mention!")
+                            self.dumpTweet(quotedTweet)
                         except tweepy.TweepError as e:
                                 print(e)
                                 print("rt error")
+
                     else:
                         try:
                             mention.retweet()
                             print("Found mention!")
+                            self.dumpTweet(mention)
+
                         except tweepy.TweepError as e:
                             print(e)
                             print("rt error")
-                    #store mention id
-                    last_seen_id = mention.id
-                    self.store_last_seen_id(
-                        last_seen_id
-                    )
+
 
 
     # searching mentionfunction
@@ -161,7 +196,7 @@ class Bot():
                     self.api.search,
                     q=keyword + " -filter:retweets",
                     count=100,
-                    geocode='23.634,-102.55,500km',
+                    geocode='21.38,-101.33,1500km',
                     lang='es',
                     result_type=result_type,
                     since=DATE_SINCE
@@ -170,6 +205,9 @@ class Bot():
                 # search each tweet
                 for tweet in tweets:
                     # 3 tweets per keyword
+                    if tweet.user.id == BANNEDID:
+                        print("BANNED!")
+                        continue
                     if tweetcont != 3:
                         if not tweet.retweeted:
                             print(tweet.id)
@@ -185,25 +223,31 @@ class Bot():
                                 )
 
                                 tweetmessage = tweet.full_text
-                                if self.bot_wit.get_intent(tweetmessage):
-                                    print(tweet.full_text)
-                                    print(tweet.user.location)
-                                    print(tweet.id)
-                                    print('Valid tweet! Responding...')
-                                    self.api.update_status(
-                                        REPLY_STRING.format(
-                                            tweet.user.screen_name),
-                                        tweet.id
-                                    )
+                                try:
+                                    if self.bot_wit.get_intent(tweetmessage):
+                                        print(tweet.full_text)
+                                        print(tweet.user.location)
+                                        print(tweet.id)
+                                        print('Valid tweet! Responding...')
+                                        #dump tweet to json
+                                        self.dumpTweet(tweet)
+                                        #respond
+                                        self.api.update_status(
+                                            REPLY_STRING.format(
+                                                tweet.user.screen_name),
+                                            tweet.id
+                                        )
 
-                                    print("Checking mentions...")
-                                    self.mention_function()
-                                    foundtweets = True
-                                    sleep(1800)
-                                else:
-                                    print(tweet.full_text)
-                                    self.api.unretweet(tweetID)
-                                    print('Invalid tweet! Unretweeting...')
+                                        print("Checking mentions...")
+                                        self.mention_function()
+                                        foundtweets = True
+                                        sleep(1800)
+                                    else:
+                                        print(tweet.full_text)
+                                        self.api.unretweet(tweetID)
+                                        print('Invalid tweet! Unretweeting...')
+                                except:
+                                    print("wit error")
 
                             except tweepy.TweepError as e:
                                 print(e)
