@@ -70,12 +70,12 @@ class Bot():
 
     def dumpTweet(self, tweet):
         self.counter += 1
-        print("Dumping tweet number: " + str(self.counter))
         json.dump(tweet._json, self.output)
         self.output.write('\n')
         if self.counter >= 1:
             self.output.close()
             fileString = 'badtweets_%s.json' % self.dateString
+            print("Dumping tweet into " + fileString)
             shutil.move(fileString, 'tweetJSONS')
             self.dateString = time.strftime('%Y-%m-%d - %H-%M-%S')
             self.output = open('bdatweets_%s.json'
