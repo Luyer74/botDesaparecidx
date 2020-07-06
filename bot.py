@@ -4,6 +4,8 @@ import time
 import json
 import os
 import shutil
+import wget
+import facebook
 from bot_wit import BotWit
 from time import sleep
 
@@ -40,6 +42,8 @@ class Bot():
                         % self.dateString, 'a')
         #wit
         self.bot_wit = BotWit(credentials.BOT_WIT_KEY)
+        #fb
+        self.graph = facebook.GraphAPI(credentials.FACEBOOK_KEY)
         #twitter credentials
         auth = tweepy.OAuthHandler(
             credentials.CONSUMER_KEY,
@@ -83,7 +87,31 @@ class Bot():
             self.counter = 0
 
 
+    def postFacebook(self, tweet):
+        tweet_text = tweet.full_text
+        tweet_user = tweet.user.screen_name
+        ent = tweet.entities
+        urls = tweet.entities['urls']
+        if 'media' in ent:
+            #get image url
+            images = tweet.entities['media']
+            img_url = images[0]['media_url']
+            path = 'img.jpg'
+            #remove previous image
+            if os.path.isfile(path):
+                os.remove(path)
+            #post 
+            post_message = tweet_user + " pide tu ayuda para difundir lo siguiente:\n \"" + tweet_text + "\""
+            wget.download(img_url, path)
+            self.graph.put_photo(image=open(path, 'rb'), message = post_message)
+            return
+        elif urls:
+            link_tweet = urls[0]['expanded_url']
+            post_message = tweet_user + " pide tu ayuda para difundir lo siguiente:\n \"" + tweet_text + "\" "
+            self.graph.put_object(parent_object="me", connection_name="feed", message=post_message, link=link_tweet)
+            return
 
+    
     # mention function
     def mention_function(self):
         last_seen_id = self.get_last_seen_id()
@@ -135,6 +163,7 @@ class Bot():
                             if newuser.in_reply_to_status_id is None:
                                 try:
                                     newuser.retweet()
+                                    self.postFacebook(newuser)
                                     self.dumpTweet(newuser)
                                     print("Found mention!")
                                     last_seen_id = mention.id
@@ -168,6 +197,7 @@ class Bot():
                         try:
                             quotedTweet.retweet()
                             print("Found mention!")
+                            self.postFacebook(quotedTweet)
                             self.dumpTweet(quotedTweet)
                         except tweepy.TweepError as e:
                                 print(e)
@@ -177,6 +207,7 @@ class Bot():
                         try:
                             mention.retweet()
                             print("Found mention!")
+                            self.postFacebook(mention)
                             self.dumpTweet(mention)
 
                         except tweepy.TweepError as e:
@@ -231,7 +262,8 @@ class Bot():
                                         print(tweet.user.location)
                                         print(tweet.id)
                                         print('Valid tweet! Responding...')
-                                        #dump tweet to json
+                                        #dump tweet to json and post to fb
+                                        self.postFacebook(tweet)
                                         self.dumpTweet(tweet)
                                         #respond
                                         self.api.update_status(
