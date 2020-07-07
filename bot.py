@@ -102,12 +102,21 @@ class Bot():
                 os.remove(path)
             #post 
             post_message = tweet_user + " pide tu ayuda para difundir lo siguiente:\n \"" + tweet_text + "\""
-            wget.download(img_url, path)
+            gotImage = False
+            while not gotImage:
+                try:
+                    wget.download(img_url, path)
+                    gotImage = True
+                except:
+                    print("Error downloading image! Trying again...")
+                    sleep(60)
+            print("\nPosting to facebook...")
             self.graph.put_photo(image=open(path, 'rb'), message = post_message)
             return
         elif urls:
             link_tweet = urls[0]['expanded_url']
             post_message = tweet_user + " pide tu ayuda para difundir lo siguiente:\n \"" + tweet_text + "\" "
+            print("\nPosting to facebook...")
             self.graph.put_object(parent_object="me", connection_name="feed", message=post_message, link=link_tweet)
             return
 
