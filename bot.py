@@ -8,6 +8,7 @@ import wget
 import facebook
 from bot_wit import BotWit
 from time import sleep
+from MySQLdb import _mysql
 
 
 ID_MEXICO = credentials.ID_MEXICO
@@ -44,6 +45,8 @@ class Bot():
         self.bot_wit = BotWit(credentials.BOT_WIT_KEY)
         #fb
         self.graph = facebook.GraphAPI(credentials.FACEBOOK_KEY)
+        #database
+        self.db=_mysql.connect(host=credentials.DB_HOST,user=credentials.DB_USER,passwd=credentials.DB_PASS,db=credentials.DB_NAME)
         #twitter credentials
         auth = tweepy.OAuthHandler(
             credentials.CONSUMER_KEY,
@@ -76,7 +79,7 @@ class Bot():
         self.counter += 1
         json.dump(tweet._json, self.output)
         self.output.write('\n')
-        if self.counter >= 1:
+        if self.counter >= 50:
             self.output.close()
             fileString = 'bdatweets_%s.json' % self.dateString
             print("Dumping tweet into " + fileString)
@@ -120,7 +123,151 @@ class Bot():
             self.graph.put_object(parent_object="me", connection_name="feed", message=post_message, link=link_tweet)
             return
 
-    
+    def connectToDB(self):
+        connected = False
+        while not connected:
+            try:
+                print("Connecting to database...")
+                self.db=_mysql.connect(host="luyer.mysql.pythonanywhere-services.com",user="luyer",passwd="queso7458",db="luyer$default")
+                connected = True
+            except:
+                print("Failed connection, trying again...")
+                sleep(10)
+        return
+
+    def insertData(self, tweet, search_id):
+        #user info
+        userID = tweet.user.id_str
+        user_verified = tweet.user.verified
+        if user_verified:
+            verified = 'True'
+        else:
+            verified = 'False'
+        followers_count = tweet.user.followers_count
+        user_location = tweet.user.location
+        user_name = tweet.user.screen_name
+        #tweet info
+        tweet_id = tweet.id
+        tweet_dateF = tweet.created_at
+
+        try:
+            tweet_text = tweet.full_text 
+        except AttributeError:
+            tweet_text = tweet.text
+
+        favorite_count = tweet.favorite_count
+        retweet_count = tweet.retweet_count
+        #hashtags
+        try:
+            hashtag_objects = tweet.entities.hashtags
+        except AttributeError:
+            hashtag_objects = []
+        #check media if it exists
+        try:
+            media_urls = tweet.entities.media
+        except AttributeError:
+            media_urls = []
+            print("No media found")
+
+        #check if user is following
+        try:
+            friendship = self.api.show_friendship(source_id=BOT_ID, target_id=userID)
+            if friendship[1].following:
+                isFollowing = 'True'
+            else:
+                isFollowing = 'False'
+        except:
+            isFollowing = 'False'
+
+        #change date format
+        tweet_date = tweet_dateF.strftime("%Y-%m-%d, %H%M%S")
+        tweet_date = tweet_date[:10]
+
+        #insert into users
+        inserted = False
+        user_string = """INSERT INTO USERS (user_id, isFollowing, name, location, verified, followers_count) VALUES ("""
+        user_string = user_string + userID + ", " + isFollowing + ", \'" + user_name + "\', \'" + user_location + "\', " + str(verified) + ", " + str(followers_count) + ")"
+        print("running query:" + user_string)
+        #EXAMPLE QUERY
+        #db.query("""INSERT INTO USERS (user_id, isFollowing, numUses, name, location, verified, followers_count) VALUES (123, true, 7, 'bres', 'mexico', false, 300)""")
+
+        #run query
+        try:
+            self.db.query(user_string)
+            print("Inserted user into DB!")
+        except _mysql.IntegrityError as e:
+            print(e)
+            print("error inserting user")
+            inserted = True
+        except _mysql.OperationalError as e:
+            print(e)
+            self.connectToDB
+
+        #insert into tweets
+        inserted = False
+        tweet_string = """INSERT INTO TWEETS (tweet_id, user, tweet_text, favorite_count, retweet_count, search_id, date_created) VALUES("""
+        tweet_string = tweet_string + str(tweet_id) + ", " + userID + ", \'" + tweet_text + "\'," + str(favorite_count) + ", " + str(retweet_count) + ", " + str(search_id) + ", \'" + tweet_date + "\')"
+
+        print("running query:" + tweet_string)
+        #run query
+        while not inserted:
+            try:
+                self.db.query(tweet_string)
+                print("Inserted tweet into DB!")
+                inserted = True
+            except _mysql.IntegrityError as e:
+                print("error inserting tweet")
+                print(e)
+                inserted = True
+            except _mysql.OperationalError as e:
+                print(e)
+                self.connectToDB
+
+
+        #insert into hashtags
+        
+        for hashtag in hashtag_objects:
+            inserted = False
+            HT = hashtag['text']
+            hashtag_string = """INSERT INTO HASHTAGS (tweet_id, hashtag) VALUES("""
+            hashtag_string = hashtag_string + str(tweet_id) + ", \'" + HT + "\')"
+
+            print("running query:" + hashtag_string)
+            #run query
+            while not inserted:
+                try:
+                    self.db.query(hashtag_string)
+                    print("Inserted HT into DB!")
+                except _mysql.IntegrityError as e:
+                    print("error inserting hashtag") 
+                    print(e)
+                    inserted = True
+                except _mysql.OperationalError as e:
+                    print(e)
+                    self.connectToDB
+                        
+        #insert into tweet_links
+        for url in media_urls:
+            inserted = False
+            link = url['media_url']
+            media_string = """INSERT INTO TWEET_IMAGES (tweet_id, image_link) VALUES("""
+            media_string = media_string + str(tweet_id) + ", \'" + link + "\')"
+
+            print("running query:" + media_string)
+            #run query
+            while not inserted:
+                try:
+                    self.db.query(media_string)
+                    print("Inserted image into DB!")
+                except _mysql.IntegrityError as e:
+                    print("error inserting image")
+                    print(e)
+                    inserted = True
+                except _mysql.OperationalError as e:
+                    print(e)
+                    self.connectToDB
+
+
     # mention function
     def mention_function(self):
         last_seen_id = self.get_last_seen_id()
@@ -174,6 +321,7 @@ class Bot():
                                     newuser.retweet()
                                     self.postFacebook(newuser)
                                     self.dumpTweet(newuser)
+                                    self.insertData(newuser, 1)
                                     print("Found mention!")
                                     last_seen_id = mention.id
                                     self.store_last_seen_id(
@@ -208,6 +356,7 @@ class Bot():
                             print("Found mention!")
                             self.postFacebook(quotedTweet)
                             self.dumpTweet(quotedTweet)
+                            self.insertData(quotedTweet, 2)
                         except tweepy.TweepError as e:
                                 print(e)
                                 print("rt error")
@@ -218,6 +367,7 @@ class Bot():
                             print("Found mention!")
                             self.postFacebook(mention)
                             self.dumpTweet(mention)
+                            self.insertData(mention, 3)
 
                         except tweepy.TweepError as e:
                             print(e)
@@ -274,6 +424,7 @@ class Bot():
                                         #dump tweet to json and post to fb
                                         self.postFacebook(tweet)
                                         self.dumpTweet(tweet)
+                                        self.insertData(tweet, 4)
                                         #respond
                                         self.api.update_status(
                                             REPLY_STRING.format(
