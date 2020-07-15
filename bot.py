@@ -192,16 +192,18 @@ class Bot():
         #db.query("""INSERT INTO USERS (user_id, isFollowing, numUses, name, location, verified, followers_count) VALUES (123, true, 7, 'bres', 'mexico', false, 300)""")
 
         #run query
-        try:
-            self.db.query(user_string)
-            print("Inserted user into DB!")
-        except _mysql.IntegrityError as e:
-            print(e)
-            print("error inserting user")
-            inserted = True
-        except _mysql.OperationalError as e:
-            print(e)
-            self.connectToDB
+        while not inserted:
+            try:
+                self.db.query(user_string)
+                print("Inserted user into DB!")
+                inserted = True
+            except _mysql.IntegrityError as e:
+                print(e)
+                print("error inserting user")
+                inserted = True
+            except _mysql.OperationalError as e:
+                print(e)
+                self.connectToDB
 
         #insert into tweets
         inserted = False
@@ -238,6 +240,7 @@ class Bot():
                 try:
                     self.db.query(hashtag_string)
                     print("Inserted HT into DB!")
+                    inserted = True
                 except _mysql.IntegrityError as e:
                     print("error inserting hashtag") 
                     print(e)
@@ -259,6 +262,7 @@ class Bot():
                 try:
                     self.db.query(media_string)
                     print("Inserted image into DB!")
+                    inserted = True
                 except _mysql.IntegrityError as e:
                     print("error inserting image")
                     print(e)
