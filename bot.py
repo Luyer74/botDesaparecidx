@@ -103,7 +103,7 @@ class Bot():
             #remove previous image
             if os.path.isfile(path):
                 os.remove(path)
-            #post 
+            #post
             post_message = tweet_user + " pide tu ayuda para difundir lo siguiente:\n \"" + tweet_text + "\""
             gotImage = False
             while not gotImage:
@@ -128,7 +128,7 @@ class Bot():
         while not connected:
             try:
                 print("Connecting to database...")
-                self.db=_mysql.connect(host="luyer.mysql.pythonanywhere-services.com",user="luyer",passwd="queso7458",db="luyer$default")
+                self.db=_mysql.connect(host=credentials.DB_HOST,user=credentials.DB_USER,passwd=credentials.DB_PASS,db=credentials.DB_NAME)
                 connected = True
             except:
                 print("Failed connection, trying again...")
@@ -151,7 +151,7 @@ class Bot():
         tweet_dateF = tweet.created_at
 
         try:
-            tweet_text = tweet.full_text 
+            tweet_text = tweet.full_text
         except AttributeError:
             tweet_text = tweet.text
 
@@ -195,15 +195,20 @@ class Bot():
         while not inserted:
             try:
                 self.db.query(user_string)
-                print("Inserted user into DB!")
                 inserted = True
+                print("Inserted user into DB!")
             except _mysql.IntegrityError as e:
                 print(e)
                 print("error inserting user")
                 inserted = True
             except _mysql.OperationalError as e:
                 print(e)
-                self.connectToDB
+                print("disconected")
+                self.connectToDB()
+            except:
+                print("UNKNOWN ERROR")
+                raise
+                inserted = True
 
         #insert into tweets
         inserted = False
@@ -223,11 +228,16 @@ class Bot():
                 inserted = True
             except _mysql.OperationalError as e:
                 print(e)
-                self.connectToDB
+                print("disconected")
+                self.connectToDB()
+            except:
+                print("UNKNOWN ERROR")
+                raise
+                inserted = True
 
 
         #insert into hashtags
-        
+
         for hashtag in hashtag_objects:
             inserted = False
             HT = hashtag['text']
@@ -239,16 +249,21 @@ class Bot():
             while not inserted:
                 try:
                     self.db.query(hashtag_string)
-                    print("Inserted HT into DB!")
                     inserted = True
+                    print("Inserted HT into DB!")
                 except _mysql.IntegrityError as e:
-                    print("error inserting hashtag") 
+                    print("error inserting hashtag")
                     print(e)
                     inserted = True
                 except _mysql.OperationalError as e:
                     print(e)
-                    self.connectToDB
-                        
+                    print("disconected")
+                    self.connectToDB()
+                except:
+                    print("UNKNOWN ERROR")
+                    raise
+                    inserted = True
+
         #insert into tweet_links
         for url in media_urls:
             inserted = False
@@ -269,7 +284,12 @@ class Bot():
                     inserted = True
                 except _mysql.OperationalError as e:
                     print(e)
-                    self.connectToDB
+                    print("disconected")
+                    self.connectToDB()
+                except:
+                    print("UNKNOWN ERROR")
+                    raise
+                    inserted = True
 
 
     # mention function
@@ -286,7 +306,7 @@ class Bot():
         for mention in mentions:
             print(str(mention.id) + ' - ' + mention.full_text)
             # follows user who mentions
-            if mention.user.id == BANNEDID:
+            if mention.user.id in BANNEDID:
                 print("BANNED")
                 continue
             if not mention.user.following:
