@@ -13,7 +13,7 @@ from MySQLdb import _mysql
 
 ID_MEXICO = credentials.ID_MEXICO
 BOT_ID = credentials.BOT_ID
-BANNEDID = None
+BANNEDID = []
 KEYWORDS = [
     "#desaparecido",
     "#desaparecida",
@@ -30,6 +30,7 @@ REPLY_STRING = (
 )
 DATE_SINCE = "2020-04-01"
 LAST_SEEN_FILE = "last_seen_id.txt"
+LAST_SEEN_MESSAGE = "last_seen_message.txt"
 
 
 class Bot():
@@ -73,6 +74,16 @@ class Bot():
     def store_last_seen_id(self, last_seen_id):
         with open(LAST_SEEN_FILE, "w") as file:
             file.write(str(last_seen_id))
+
+
+    def get_last_seen_message(self):
+        with open(LAST_SEEN_MESSAGE, "r") as file:
+            return int(file.read().strip())
+
+
+    def store_last_seen_message(self, last_seen_message):
+        with open(LAST_SEEN_MESSAGE, "w") as file:
+            file.write(str(last_seen_message))
 
 
     def dumpTweet(self, tweet):
@@ -292,6 +303,26 @@ class Bot():
                     inserted = True
 
 
+    #message function
+    def message_function(self):
+        last_seen_message = self.get_last_seen_message()
+        messages = self.api.list_direct_messages(10)
+        first = True
+        for message in messages:
+            message_timestamp = int(message.created_timestamp)
+            if message_timestamp < last_seen_message:
+                break
+            else:
+                if first:
+                    self.store_last_seen_message(message_timestamp)
+                    first = False
+                reply_id = message.message_create['sender_id']
+                if reply_id == BOT_ID:
+                    continue
+                bot_message = """Hola! Si necesitas que difunda un caso de desaparición puedes responder o etiquetarme con mi @ en el tweet que contenga la información o también puedes ingresar a www.botdesparecidx.com y en la sección de reportar puedes llenar un formulario para que difunda tu caso en mis redes! Si tienes otra duda puedes contactar a mi desarrollador."""
+                self.api.send_direct_message(reply_id, bot_message)
+                
+
     # mention function
     def mention_function(self):
         last_seen_id = self.get_last_seen_id()
@@ -458,6 +489,8 @@ class Bot():
 
                                         print("Checking mentions...")
                                         self.mention_function()
+                                        print("Checking messages...")
+                                        self.message_function()
                                         foundtweets = True
                                         sleep(1800)
                                     else:

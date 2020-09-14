@@ -34,3 +34,16 @@ CREATE TABLE TWEET_IMAGES (
 	FOREIGN KEY(tweet_id) references TWEETS(tweet_id)
 );
 
+CREATE TABLE PAGE_FORMS (
+    nombre VARCHAR(280),
+    sexo VARCHAR(280),
+    edad INT,
+    visto TEXT,
+    fechaDes DATE,
+    fechaFor DATE,
+    rasgos TEXT,
+    image_name VARCHAR(280),
+    comentarios TEXT,
+    email VARCHAR(280),
+    PRIMARY KEY(email, nombre)
+);
