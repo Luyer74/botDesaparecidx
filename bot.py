@@ -1,19 +1,16 @@
 import tweepy  # https://github.com/tweepy/tweepy
-import credentials
-import time
-import json
-import os
-import shutil
-import wget
-import facebook
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import db
+import ucredentials
+import requests
 from bot_wit import BotWit
 from time import sleep
-from MySQLdb import _mysql
 
 
-ID_MEXICO = credentials.ID_MEXICO
-BOT_ID = credentials.BOT_ID
-BANNEDID = []
+ID_MEXICO = ucredentials.ID_MEXICO
+BOT_ID = ucredentials.BOT_ID
+BANNEDID = [1231085650415366145, 156679524, 109105795, 510622252, 140630292, 1233249435326599168, 2440710531, 1229080680, 1303547842741534723, 1223799471961706496, 1232732937495310337, 2451775405, 1285701537088409600, 1273177907561627651, 2868288303, 3254924130]
 KEYWORDS = [
     "#desaparecido",
     "#desaparecida",
@@ -38,25 +35,24 @@ class Bot():
 
     def __init__(self):
         self.counter = 0
-        # define the filename with time as prefix
-        self.dateString = time.strftime('%Y-%m-%d - %H-%M-%S')
-        self.output = open('bdatweets_%s.json'
-                        % self.dateString, 'a')
         #wit
-        self.bot_wit = BotWit(credentials.BOT_WIT_KEY)
+        self.bot_wit = BotWit(ucredentials.BOT_WIT_KEY)
         #fb
-        self.graph = facebook.GraphAPI(credentials.FACEBOOK_KEY)
-        #database
-        self.db=_mysql.connect(host=credentials.DB_HOST,user=credentials.DB_USER,passwd=credentials.DB_PASS,db=credentials.DB_NAME)
+        self.page_token = ucredentials.FACEBOOK_KEY
+        self.page_id = "101518154964830"
+        #firebase
+        # Fetch the service account key JSON file contents
+        self.cred = credentials.Certificate('keys.json')
+
         #twitter credentials
         auth = tweepy.OAuthHandler(
-            credentials.CONSUMER_KEY,
-            credentials.CONSUMER_SECRET
+            ucredentials.CONSUMER_KEY,
+            ucredentials.CONSUMER_SECRET
         )
 
         auth.set_access_token(
-            credentials.ACCESS_KEY,
-            credentials.ACCESS_SECRET
+            ucredentials.ACCESS_KEY,
+            ucredentials.ACCESS_SECRET
         )
 
         self.api = tweepy.API(
@@ -86,21 +82,6 @@ class Bot():
             file.write(str(last_seen_message))
 
 
-    def dumpTweet(self, tweet):
-        self.counter += 1
-        json.dump(tweet._json, self.output)
-        self.output.write('\n')
-        if self.counter >= 50:
-            self.output.close()
-            fileString = 'bdatweets_%s.json' % self.dateString
-            print("Dumping tweet into " + fileString)
-            shutil.move(fileString, 'tweetJSONS')
-            self.dateString = time.strftime('%Y-%m-%d - %H-%M-%S')
-            self.output = open('bdatweets_%s.json'
-                        % self.dateString, 'a')
-            self.counter = 0
-
-
     def postFacebook(self, tweet):
         tweet_text = tweet.full_text
         tweet_user = tweet.user.screen_name
@@ -110,197 +91,115 @@ class Bot():
             #get image url
             images = tweet.entities['media']
             img_url = images[0]['media_url']
-            path = 'img.jpg'
-            #remove previous image
-            if os.path.isfile(path):
-                os.remove(path)
+            print("\nPosting to facebook...")
             #post
             post_message = tweet_user + " pide tu ayuda para difundir lo siguiente:\n \"" + tweet_text + "\""
-            gotImage = False
-            while not gotImage:
-                try:
-                    wget.download(img_url, path)
-                    gotImage = True
-                except:
-                    print("Error downloading image! Trying again...")
-                    sleep(60)
-            print("\nPosting to facebook...")
-            self.graph.put_photo(image=open(path, 'rb'), message = post_message)
+            post_message = post_message.replace('#', '/')
+            post_message = post_message.replace('@', '/')
+            fb_url = f"https://graph.facebook.com/{self.page_id}/photos?url={img_url}&access_token={self.page_token}"
+            fb_post = requests.post(fb_url).json()
+            print(fb_post)
+            #update post with message
+            post_id = fb_post['post_id']
+            fb_url_update = f"https://graph.facebook.com/{post_id}?message={post_message}&access_token={self.page_token}"
+            updated_post = requests.post(fb_url_update).json()
+            print(updated_post)
             return
         elif urls:
-            link_tweet = urls[0]['expanded_url']
-            post_message = tweet_user + " pide tu ayuda para difundir lo siguiente:\n \"" + tweet_text + "\" "
             print("\nPosting to facebook...")
-            self.graph.put_object(parent_object="me", connection_name="feed", message=post_message, link=link_tweet)
+            link_tweet = urls[0]['expanded_url']
+            post_message = tweet_user + " pide tu ayuda para difundir lo siguiente:\n \"" + tweet_text + "\""
+            post_message = post_message.replace('#', '/')
+            post_message = post_message.replace('@', '/')
+            fb_url = f"https://graph.facebook.com/{self.page_id}/feed?message={post_message}&link={link_tweet}&access_token={self.page_token}"
+            fb_post = requests.post(fb_url).json()
+            print(fb_post)
             return
 
-    def connectToDB(self):
-        connected = False
-        while not connected:
-            try:
-                print("Connecting to database...")
-                self.db=_mysql.connect(host=credentials.DB_HOST,user=credentials.DB_USER,passwd=credentials.DB_PASS,db=credentials.DB_NAME)
-                connected = True
-            except:
-                print("Failed connection, trying again...")
-                sleep(10)
-        return
-
     def insertData(self, tweet, search_id):
-        #user info
-        userID = tweet.user.id_str
+        # Initialize the app with a service account, granting admin privileges
+        ref = db.reference('/')
+        #get data
+        tweet_dateF = tweet.created_at
+        tweet_date = tweet_dateF.strftime("%Y-%m-%d, %H%M%S")
+        tweet_date = tweet_date[:10]
         user_verified = tweet.user.verified
         if user_verified:
-            verified = 'True'
+            verified = 1
         else:
-            verified = 'False'
-        followers_count = tweet.user.followers_count
-        user_location = tweet.user.location
-        user_name = tweet.user.screen_name
-        #tweet info
-        tweet_id = tweet.id
-        tweet_dateF = tweet.created_at
+            verified = 0
 
-        try:
-            tweet_text = tweet.full_text
-        except AttributeError:
-            tweet_text = tweet.text
-
-        favorite_count = tweet.favorite_count
-        retweet_count = tweet.retweet_count
         #hashtags
         try:
-            hashtag_objects = tweet.entities.hashtags
-        except AttributeError:
+            hashtag_objects = tweet.entities['hashtags']
+        except (AttributeError, KeyError):
             hashtag_objects = []
+            print("No hashtags found")
         #check media if it exists
         try:
-            media_urls = tweet.entities.media
-        except AttributeError:
+            media_urls = tweet.entities['media']
+        except (AttributeError, KeyError):
             media_urls = []
             print("No media found")
 
         #check if user is following
         try:
-            friendship = self.api.show_friendship(source_id=BOT_ID, target_id=userID)
+            friendship = self.api.show_friendship(source_id=BOT_ID, target_id=tweet.user.id)
             if friendship[1].following:
-                isFollowing = 'True'
+                isFollowing = 1
             else:
-                isFollowing = 'False'
+                isFollowing = 0
         except:
-            isFollowing = 'False'
+            isFollowing = 0
 
-        #change date format
-        tweet_date = tweet_dateF.strftime("%Y-%m-%d, %H%M%S")
-        tweet_date = tweet_date[:10]
+        #INSERT INTO TWEETS
+        tweet_ref = ref.child("TWEETS")
+        TWEET_dict = {str(tweet.id) : {
+            "user" : tweet.user.id_str,
+            "tweet_text" : tweet.full_text,
+            "favorite_count" : tweet.favorite_count,
+            "retweet_count" : tweet.retweet_count,
+            "search_id" : 1,
+            "date_created" : tweet_date
+        }}
+        print("Inserting tweet into Firebase...")
+        tweet_ref.update(TWEET_dict)
 
-        #insert into users
-        inserted = False
-        user_string = """INSERT INTO USERS (user_id, isFollowing, name, location, verified, followers_count) VALUES ("""
-        user_string = user_string + userID + ", " + isFollowing + ", \'" + user_name + "\', \'" + user_location + "\', " + str(verified) + ", " + str(followers_count) + ")"
-        print("running query:" + user_string)
-        #EXAMPLE QUERY
-        #db.query("""INSERT INTO USERS (user_id, isFollowing, numUses, name, location, verified, followers_count) VALUES (123, true, 7, 'bres', 'mexico', false, 300)""")
+        #INSERT INTO USERS
+        user_ref = ref.child("USERS")
+        USER_dict = {str(tweet.user.id) : {
+            "isFollowing" : isFollowing,
+            "name" : tweet.user.screen_name,
+            "location" : tweet.user.location,
+            "verified" : verified,
+            "followers_count" : tweet.user.followers_count
+        }}
+        print("Inserting user into Firebase...")
+        user_ref.update(USER_dict)
 
-        #run query
-        while not inserted:
-            try:
-                self.db.query(user_string)
-                inserted = True
-                print("Inserted user into DB!")
-            except _mysql.IntegrityError as e:
-                print(e)
-                print("error inserting user")
-                inserted = True
-            except _mysql.OperationalError as e:
-                print(e)
-                print("disconected")
-                self.connectToDB()
-            except:
-                print("UNKNOWN ERROR")
-                raise
-                inserted = True
-
-        #insert into tweets
-        inserted = False
-        tweet_string = """INSERT INTO TWEETS (tweet_id, user, tweet_text, favorite_count, retweet_count, search_id, date_created) VALUES("""
-        tweet_string = tweet_string + str(tweet_id) + ", " + userID + ", \'" + tweet_text + "\'," + str(favorite_count) + ", " + str(retweet_count) + ", " + str(search_id) + ", \'" + tweet_date + "\')"
-
-        print("running query:" + tweet_string)
-        #run query
-        while not inserted:
-            try:
-                self.db.query(tweet_string)
-                print("Inserted tweet into DB!")
-                inserted = True
-            except _mysql.IntegrityError as e:
-                print("error inserting tweet")
-                print(e)
-                inserted = True
-            except _mysql.OperationalError as e:
-                print(e)
-                print("disconected")
-                self.connectToDB()
-            except:
-                print("UNKNOWN ERROR")
-                raise
-                inserted = True
-
-
-        #insert into hashtags
-
+        #INSERT INTO HASHTAGS
+        href = ref.child("HASHTAGS/" + str(tweet.id))
         for hashtag in hashtag_objects:
-            inserted = False
-            HT = hashtag['text']
-            hashtag_string = """INSERT INTO HASHTAGS (tweet_id, hashtag) VALUES("""
-            hashtag_string = hashtag_string + str(tweet_id) + ", \'" + HT + "\')"
+            HTindex = len(href.get()) if href.get() else 0
+            HASHTAG_dict = {str(HTindex) : {
+                "hashtag" : hashtag['text']
+            }}
+            print("Inserting hashtag into Firebase...")
+            href.update(HASHTAG_dict)
 
-            print("running query:" + hashtag_string)
-            #run query
-            while not inserted:
-                try:
-                    self.db.query(hashtag_string)
-                    inserted = True
-                    print("Inserted HT into DB!")
-                except _mysql.IntegrityError as e:
-                    print("error inserting hashtag")
-                    print(e)
-                    inserted = True
-                except _mysql.OperationalError as e:
-                    print(e)
-                    print("disconected")
-                    self.connectToDB()
-                except:
-                    print("UNKNOWN ERROR")
-                    raise
-                    inserted = True
 
-        #insert into tweet_links
+        #INSERT INTO IMAGES
+        img_ref = ref.child("IMAGES/" + str(tweet.id))
         for url in media_urls:
-            inserted = False
-            link = url['media_url']
-            media_string = """INSERT INTO TWEET_IMAGES (tweet_id, image_link) VALUES("""
-            media_string = media_string + str(tweet_id) + ", \'" + link + "\')"
+            IMGindex = len(img_ref.get()) if img_ref.get() else 0
+            IMAGES_dict = {str(IMGindex) : {
+                "image_link" : url['media_url']
+            }}
+            print("Inserting image into Firebase...")
+            img_ref.update(IMAGES_dict)
 
-            print("running query:" + media_string)
-            #run query
-            while not inserted:
-                try:
-                    self.db.query(media_string)
-                    print("Inserted image into DB!")
-                    inserted = True
-                except _mysql.IntegrityError as e:
-                    print("error inserting image")
-                    print(e)
-                    inserted = True
-                except _mysql.OperationalError as e:
-                    print(e)
-                    print("disconected")
-                    self.connectToDB()
-                except:
-                    print("UNKNOWN ERROR")
-                    raise
-                    inserted = True
+
+
 
 
     #message function
@@ -310,7 +209,7 @@ class Bot():
         first = True
         for message in messages:
             message_timestamp = int(message.created_timestamp)
-            if message_timestamp < last_seen_message:
+            if message_timestamp <= last_seen_message:
                 break
             else:
                 if first:
@@ -321,7 +220,7 @@ class Bot():
                     continue
                 bot_message = """Hola! Si necesitas que difunda un caso de desaparición puedes responder o etiquetarme con mi @ en el tweet que contenga la información o también puedes ingresar a www.botdesparecidx.com y en la sección de reportar puedes llenar un formulario para que difunda tu caso en mis redes! Si tienes otra duda puedes contactar a mi desarrollador."""
                 self.api.send_direct_message(reply_id, bot_message)
-                
+
 
     # mention function
     def mention_function(self):
@@ -361,6 +260,10 @@ class Bot():
                         continue
                     # check if it is following itself
                     if newuser.user.id != BOT_ID:
+                        #check if banned
+                        if newuser.user.id in BANNEDID:
+                            print("BANNED")
+                            continue
                         # follows original tweet
                         if not newuser.user.following:
                             try:
@@ -375,7 +278,6 @@ class Bot():
                                 try:
                                     newuser.retweet()
                                     self.postFacebook(newuser)
-                                    self.dumpTweet(newuser)
                                     self.insertData(newuser, 1)
                                     print("Found mention!")
                                     last_seen_id = mention.id
@@ -407,10 +309,12 @@ class Bot():
                             print("fav error")
                         #retweet quoted
                         try:
+                            if quotedTweet.user.id in BANNEDID:
+                                print("BANNED")
+                                continue
                             quotedTweet.retweet()
                             print("Found mention!")
                             self.postFacebook(quotedTweet)
-                            self.dumpTweet(quotedTweet)
                             self.insertData(quotedTweet, 2)
                         except tweepy.TweepError as e:
                                 print(e)
@@ -421,7 +325,6 @@ class Bot():
                             mention.retweet()
                             print("Found mention!")
                             self.postFacebook(mention)
-                            self.dumpTweet(mention)
                             self.insertData(mention, 3)
 
                         except tweepy.TweepError as e:
@@ -443,7 +346,7 @@ class Bot():
                     self.api.search,
                     q=keyword + " -filter:retweets",
                     count=100,
-                    geocode='21.38,-101.33,1500km',
+                    geocode='21.38,-101.33,1200km',
                     lang='es',
                     result_type=result_type,
                     since=DATE_SINCE
@@ -452,7 +355,7 @@ class Bot():
                 # search each tweet
                 for tweet in tweets:
                     # 3 tweets per keyword
-                    if tweet.user.id == BANNEDID:
+                    if tweet.user.id in BANNEDID:
                         print("BANNED!")
                         continue
                     if tweetcont != 3:
@@ -478,7 +381,6 @@ class Bot():
                                         print('Valid tweet! Responding...')
                                         #dump tweet to json and post to fb
                                         self.postFacebook(tweet)
-                                        self.dumpTweet(tweet)
                                         self.insertData(tweet, 4)
                                         #respond
                                         self.api.update_status(
@@ -516,6 +418,9 @@ class Bot():
 
 
     def main(self):
+        firebase_admin.initialize_app(self.cred, {
+            'databaseURL': 'https://pythondbtest-2fbd1-default-rtdb.firebaseio.com/'
+        })
         while True:
             print("Checking tweets...")
             self.worker()
